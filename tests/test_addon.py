@@ -93,3 +93,14 @@ def test_injects_substitutor_js_content():
     s.response(flow)
     content = flow.response.content.decode('utf-8')
     assert 'SUBSTITUTIONS' in content
+
+
+def test_injects_with_nonce_when_present():
+    from addon import LinkedInSubstitutor
+    s = LinkedInSubstitutor()
+    body = b'<html><head><script nonce="abc123">var x=1;</script></head><body></body></html>'
+    flow = MockFlow('www.linkedin.com', 'text/html', body)
+    s.response(flow)
+    content = flow.response.content.decode('utf-8')
+    assert 'nonce="abc123"' in content
+    assert content.index('nonce="abc123"') < content.index('</body>')

@@ -56,10 +56,52 @@ if (typeof document !== 'undefined') {
     editor.addEventListener('input', () => replaceInEditor(editor));
   }
 
-  const observer = new MutationObserver(() => {
+  // Walk DOM tree and replace text in rendered (non-editable) nodes.
+  // Uses node.data instead of node.textContent to avoid childList mutations
+  // that would retrigger the MutationObserver.
+  function replaceInFeedNode(root) {
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const el = node.parentElement;
+          if (!el) return NodeFilter.FILTER_REJECT;
+          if (el.closest('[contenteditable]')) return NodeFilter.FILTER_REJECT;
+          const tag = el.tagName;
+          if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      nodes.push(node);
+    }
+
+    for (const textNode of nodes) {
+      const original = textNode.data;
+      const replaced = substituteText(original);
+      if (replaced !== original) {
+        textNode.data = replaced;
+      }
+    }
+  }
+
+  const observer = new MutationObserver((mutations) => {
     document
       .querySelectorAll('div[contenteditable="true"]')
       .forEach(attachToEditor);
+
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          replaceInFeedNode(node);
+        }
+      }
+    }
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
@@ -67,6 +109,8 @@ if (typeof document !== 'undefined') {
   document
     .querySelectorAll('div[contenteditable="true"]')
     .forEach(attachToEditor);
+
+  replaceInFeedNode(document.body);
 }
 
 if (typeof module !== 'undefined') {

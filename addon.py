@@ -1,11 +1,12 @@
 import os
+import re
 from mitmproxy import http
 
 _dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(_dir, 'substitutor.js'), 'r') as f:
     _script = f.read()
 
-_INJECTION = f'<script>{_script}</script>'
+_NONCE_RE = re.compile(r'<script[^>]+\bnonce=["\']([^"\']+)["\']', re.IGNORECASE)
 
 
 class LinkedInSubstitutor:
@@ -27,8 +28,12 @@ class LinkedInSubstitutor:
         if '</body>' not in content:
             return
 
+        nonce_match = _NONCE_RE.search(content)
+        nonce_attr = f' nonce="{nonce_match.group(1)}"' if nonce_match else ''
+        injection = f'<script{nonce_attr}>{_script}</script>'
+
         flow.response.content = content.replace(
-            '</body>', f'{_INJECTION}</body>', 1
+            '</body>', f'{injection}</body>', 1
         ).encode('utf-8')
 
 
