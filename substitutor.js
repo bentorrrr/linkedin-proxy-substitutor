@@ -25,21 +25,29 @@ if (typeof document !== 'undefined') {
     const replaced = substituteText(original);
     if (replaced === original) return;
 
-    const cursorOffset = Math.max(
-      0,
-      Math.min(
-        range.startOffset + (replaced.length - original.length),
-        replaced.length
-      )
-    );
+    const newCursorPos = range.startOffset + (replaced.length - original.length);
 
-    node.textContent = replaced;
-
-    const newRange = document.createRange();
-    newRange.setStart(node, cursorOffset);
-    newRange.collapse(true);
+    // Select the full text node so execCommand replaces all of it.
+    // execCommand fires proper input events that React's synthetic event
+    // system tracks — direct textContent mutation would be overwritten
+    // on React's next render cycle.
+    const fullRange = document.createRange();
+    fullRange.selectNodeContents(node);
     selection.removeAllRanges();
-    selection.addRange(newRange);
+    selection.addRange(fullRange);
+
+    document.execCommand('insertText', false, replaced);
+
+    // Restore cursor after replacement
+    const textNode = selection.anchorNode;
+    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+      const pos = Math.max(0, Math.min(newCursorPos, textNode.textContent.length));
+      const cursorRange = document.createRange();
+      cursorRange.setStart(textNode, pos);
+      cursorRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(cursorRange);
+    }
   }
 
   function attachToEditor(editor) {
